@@ -1,37 +1,34 @@
-using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 using stargate.Models;
+using stargate.Repository;
+using Microsoft.AspNetCore.Cryptography.KeyDerivation;
 
 namespace stargate.Controllers
 {
-    [Route("api/[controller]")]
+    [Route("/[controller]")]
     [ApiController]
     public class UsersController : ControllerBase
     {
-        private readonly UserContext _context;
+        private readonly UserRepository _userRepo;
 
         public UsersController(UserContext context)
         {
-            _context = context;
+            _userRepo = new UserRepository(context);
         }
 
         // GET: api/Users
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<User>>> GetUsers()
+        public ActionResult<IEnumerable<User>> GetUsers()
         {
-            return await _context.Users.ToListAsync();
+            return _userRepo.GetAll();
         }
 
         // GET: api/Users/5
         [HttpGet("{id}")]
-        public async Task<ActionResult<User>> GetUser(int id)
+        public ActionResult<User> GetUser(int id)
         {
-            var user = await _context.Users.FindAsync(id);
+            var user = _userRepo.GetById(id);
 
             if (user == null)
             {
@@ -45,30 +42,16 @@ namespace stargate.Controllers
         // To protect from overposting attacks, please enable the specific properties you want to bind to, for
         // more details see https://aka.ms/RazorPagesCRUD.
         [HttpPut("{id}")]
-        public async Task<IActionResult> PutUser(int id, User user)
+        public IActionResult PutUser(int id, User user)
         {
-            if (id != user.ID)
+            var exstingUser = _userRepo.GetById(id);
+
+            if (exstingUser == null)
             {
-                return BadRequest();
+                return NotFound();
             }
 
-            _context.Entry(user).State = EntityState.Modified;
-
-            try
-            {
-                await _context.SaveChangesAsync();
-            }
-            catch (DbUpdateConcurrencyException)
-            {
-                if (!UserExists(id))
-                {
-                    return NotFound();
-                }
-                else
-                {
-                    throw;
-                }
-            }
+            _userRepo.Update(user, id);
 
             return NoContent();
         }
@@ -77,33 +60,35 @@ namespace stargate.Controllers
         // To protect from overposting attacks, please enable the specific properties you want to bind to, for
         // more details see https://aka.ms/RazorPagesCRUD.
         [HttpPost]
-        public async Task<ActionResult<User>> PostUser(User user)
+        public ActionResult<User> PostUser(User user)
         {
-            _context.Users.Add(user);
-            await _context.SaveChangesAsync();
+            string pass = user.Password;
+            user.Password = Utils.HashPash(pass);
+            
+            _userRepo.Add(user);
 
             return CreatedAtAction("GetUser", new { id = user.ID }, user);
         }
 
         // DELETE: api/Users/5
         [HttpDelete("{id}")]
-        public async Task<ActionResult<User>> DeleteUser(int id)
+        public ActionResult<User> DeleteUser(int id)
         {
-            var user = await _context.Users.FindAsync(id);
+            var user = _userRepo.GetById(id);
             if (user == null)
             {
                 return NotFound();
             }
 
-            _context.Users.Remove(user);
-            await _context.SaveChangesAsync();
+           _userRepo.Delete(user);
 
             return user;
         }
 
         private bool UserExists(int id)
         {
-            return _context.Users.Any(e => e.ID == id);
+            var user =  _userRepo.GetById(id);
+            return user == null ? true : false;
         }
     }
 }
